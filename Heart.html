@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D프로그래밍 중간대체 과제</title>
+    <style>
+        input {
+            width: 50px;
+        }
+
+        #canvas {
+            border-right: 8px solid black;
+            margin: 0px;
+            flex: 1;
+        }
+
+        #transform {
+            height: 30px;
+            margin-left: 1px;
+            margin-top: 20px;
+            background-color: rgb(201, 201, 201);
+            line-height: 25px;
+        }
+
+        .container {
+            display: flex;
+            /* align-items: center; */
+            width: 900px;
+            border: 8px solid black;
+            margin-bottom: 10px;
+        }
+
+        .inspector {
+            padding-top: 3px;
+            padding-bottom: 10px;
+            margin-left: 1px;
+            background-color: darkgrey;
+            display: table;
+            width: 390px;
+            flex: 1;
+        }
+
+        .inspector-row {
+            display: table-row;
+        }
+
+        .inspector label,
+        .inspector input {
+            display: table-cell;
+            margin-top: 5px;
+        }
+
+        #btn {
+            position: relative;
+            right: 390px;
+            top: 130px;
+            margin-top: 30px; 
+            margin-bottom: 15px;
+            margin-left: 15px;
+            width: 100px;
+        }
+
+        .button {
+            width: 150px;
+            border: 5px solid black;
+            border-color: black;
+            border-radius: 20px;
+            font-size: 15px;
+            margin-bottom: 15px;
+            background: white;
+            color: black;
+            padding: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&lt;canvas&gt;   &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;일반 영역
+    <div class="container">
+        <canvas id="canvas" width="500px" height="500px"></canvas>
+            <div id="transform">
+                &nbsp;<img src="https://i.ibb.co/B4gZvhg/11.jpg" alt="사진" height="20px" width="20px">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>Transform</b>
+            <div class="inspector">
+                <div class="inspector-row">
+                    <b>&nbsp;Position</b>
+                    <label for="positionX"><b>X</b></label>
+                    <input type="number" id="positionX" value="200">
+                    <label for="positionY"><b>Y</b></label>
+                    <input type="number" id="positionY" value="200">
+                    <label for="positionZ"><b>Z</b></label>
+                    <input type="number" id="positionZ" value="0">
+                </div>
+                <div class="inspector-row">
+                    <b>&nbsp;Rotation</b>
+                    <label for="rotationX"><b>X</b></label>
+                    <input type="number" id="rotationX" value="0">
+                    <label for="rotationY"><b>Y</b></label>
+                    <input type="number" id="rotationY" value="0">
+                    <label for="rotationZ"><b>Z</b></label>
+                    <input type="number" id="rotationZ" value="0">
+                </div>
+                <div class="inspector-row">
+                    &nbsp;Scale
+                    <label for="scaleX">X</label>
+                    <input type="number" id="scaleX" value="1">
+                    <label for="scaleY">Y</label>
+                    <input type="number" id="scaleY" value="1">
+                    <label for="scaleZ">Z</label>
+                    <input type="number" id="scaleZ" value="1">
+                </div>
+            </div>
+        </div>
+            <div id="btn">
+                <button type="button" class="button" onclick="drawHeart()">Draw Heart</button>
+                <button type="button" class="button" onclick="undo()">Undo</button>
+                <button type="button" class="button" onclick="redo()">Redo</button>
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+
+        const inspectorX = document.getElementById("positionX");
+        const inspectorY = document.getElementById("positionY");
+        const inspectorZ = document.getElementById("positionZ");
+
+        const inspectorRotationX = document.getElementById("rotationX");
+        const inspectorRotationY = document.getElementById("rotationY");
+        const inspectorRotationZ = document.getElementById("rotationZ");
+
+        let history = [];
+        let historyIndex = -1;
+
+        let mouseX, mouseY;
+        let isDragging = false;
+        let initialMouseX, initialMouseY, initialPositionX, initialPositionY, initialScaleX, initialScaleY;
+
+        function hwMatrixMultiply(a, b) {
+            let result = [];
+            for (let i = 0; i < a.length; i++) {
+                result[i] = [];
+                for (let j = 0; j < b[0].length; j++) {
+                    let sum = 0;
+                    for (let k = 0; k < a[0].length; k++) {
+                        sum += a[i][k] * b[k][j];
+                    }
+                    result[i][j] = sum;
+                }
+            }
+            return result;
+        }
+
+        function hwTranslateMatrix(x, y, z) {
+            return [
+                [1, 0, 0, x],
+                [0, 1, 0, y],
+                [0, 0, 1, z],
+                [0, 0, 0, 1]
+            ];
+        }
+
+        function hwRotationMatrix(x, y, z) {
+            const rx = [
+                [1, 0, 0, 0],
+                [0, Math.cos(x), -Math.sin(x), 0],
+                [0, Math.sin(x), Math.cos(x), 0],
+                [0, 0, 0, 1]
+            ];
+
+            const ry = [
+                [Math.cos(y), 0, Math.sin(y), 0],
+                [0, 1, 0, 0],
+                [-Math.sin(y), 0, Math.cos(y), 0],
+                [0, 0, 0, 1]
+            ];
+
+            const rz = [
+                [Math.cos(z), -Math.sin(z), 0, 0],
+                [Math.sin(z), Math.cos(z), 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1]
+            ];
+
+            return hwMatrixMultiply(hwMatrixMultiply(rx, ry), rz);
+        }
+
+        function hwScaleMatrix(x, y, z) {
+            return [
+                [x, 0, 0, 0],
+                [0, y, 0, 0],
+                [0, 0, z, 0],
+                [0, 0, 0, 1]
+            ];
+        }
+
+        function drawHeart() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const positionX = parseFloat(inspectorX.value) || 0;
+            const positionY = parseFloat(inspectorY.value) || 0;
+            const positionZ = parseFloat(inspectorZ.value) || 0;
+
+            const rotationX = parseFloat(inspectorRotationX.value) || 0;
+            const rotationY = parseFloat(inspectorRotationY.value) || 0;
+            const rotationZ = parseFloat(inspectorRotationZ.value) || 0;
+
+            const scaleX = parseFloat(document.getElementById("scaleX").value) || 1;
+            const scaleY = parseFloat(document.getElementById("scaleY").value) || 1;
+            const scaleZ = parseFloat(document.getElementById("scaleZ").value) || 1;
+
+            const translationMatrix = hwTranslateMatrix(positionX, positionY, positionZ);
+            const rotationMatrix = hwRotationMatrix(rotationX, rotationY, rotationZ);
+            const scaleMatrix = hwScaleMatrix(scaleX, scaleY, scaleZ);
+
+            const transformationMatrix = hwMatrixMultiply(hwMatrixMultiply(translationMatrix, rotationMatrix), scaleMatrix);
+
+            ctx.fillStyle = "red";
+            ctx.beginPath();
+            ctx.moveTo(positionX, positionY);
+
+            for (let i = 0; i <= 2 * Math.PI; i += 0.01) {
+                const x = 16 * Math.pow(Math.sin(i), 3);
+                const y = -(13 * Math.cos(i) - 5 * Math.cos(2 * i) - 2 * Math.cos(3 * i) - Math.cos(4 * i));
+                const transformedPoint = hwMatrixMultiply(transformationMatrix, [[x * scaleX], [y * scaleY], [1], [1]]);
+                ctx.lineTo(transformedPoint[0][0], transformedPoint[1][0]);
+            }
+
+            ctx.fill();
+
+            ctx.fillStyle = "green";
+            ctx.beginPath();
+            ctx.arc(positionX, positionY, 5, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        function saveState() {
+            const state = {
+                x: parseFloat(inspectorX.value) || 0,
+                y: parseFloat(inspectorY.value) || 0,
+                z: parseFloat(inspectorZ.value) || 0,
+                rotationX: parseFloat(inspectorRotationX.value) || 0,
+                rotationY: parseFloat(inspectorRotationY.value) || 0,
+                rotationZ: parseFloat(inspectorRotationZ.value) || 0
+            };
+            history = history.slice(0, historyIndex + 1);
+            history.push(state);
+            historyIndex = history.length - 1;
+        }
+
+        function undo() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                applyState(history[historyIndex]);
+            }
+        }
+
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                applyState(history[historyIndex]);
+            }
+        }
+
+        function applyState(state) {
+            inspectorX.value = state.x;
+            inspectorY.value = state.y;
+            inspectorZ.value = state.z;
+            inspectorRotationX.value = state.rotationX;
+            inspectorRotationY.value = state.rotationY;
+            inspectorRotationZ.value = state.rotationZ;
+            drawHeart();
+        }
+
+        canvas.addEventListener("mousedown", function (event) {
+            isDragging = true;
+            initialMouseX = event.clientX - canvas.getBoundingClientRect().left;
+            initialMouseY = event.clientY - canvas.getBoundingClientRect().top;
+            initialPositionX = parseFloat(inspectorX.value) || 0;
+            initialPositionY = parseFloat(inspectorY.value) || 0;
+            initialScaleX = parseFloat(document.getElementById("scaleX").value) || 1;
+            initialScaleY = parseFloat(document.getElementById("scaleY").value) || 1;
+            saveState();
+        });
+
+        canvas.addEventListener("mousemove", function (event) {
+            if (isDragging) {
+                const mouseX = event.clientX - canvas.getBoundingClientRect().left;
+                const mouseY = event.clientY - canvas.getBoundingClientRect().top;
+
+                const deltaX = mouseX - initialMouseX;
+                const deltaY = mouseY - initialMouseY;
+
+                inspectorX.value = initialPositionX + deltaX;
+                inspectorY.value = initialPositionY + deltaY;
+
+                document.getElementById("scaleX").value = initialScaleX + deltaX / 100;
+                document.getElementById("scaleY").value = initialScaleY + deltaY / 100;
+
+                drawHeart();
+            }
+        });
+
+        window.addEventListener("mouseup", function () {
+            isDragging = false;
+        });
+
+        // 초기에 하트 그리기
+        drawHeart();
+    </script>
+</body>
+
+</html>
